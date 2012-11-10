@@ -1,5 +1,5 @@
  /* Jeremy Johnston */
- /* LEX Phase 1 definition file  */
+ /* LEX Phase 2 definition file  */
  /* ****************************************************************/
 
  /* Some substitutions for convenience... */
@@ -7,51 +7,51 @@ digit	[0-9]
 letter	[A-Za-z]
 ws		[ \s\t\n]
 number  ([0-9]+\.[0-9]+)|(0-9)+
+
 %{
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include "FP.h"
+#include "y.tab.h"
 
-char *symbols[100];
-int count;
-int i;
+char buf[200];
+char *s;
 
 %}
+
+%x STRING
 
 %%
  
  /* Comparison Operators ==, >, and >= */
-==			printf("Comparison-operator: %s\n", yytext);
->=			printf("Comparison-operator: %s\n", yytext);
->			printf("Comparison-operator: %s\n", yytext);
-
+==			{ return EQ; }
+>=			{ return GE; }
+>			{ return GR; }
 
  /* Boolean operators */
-and			printf("Boolean-operator: %s\n", yytext);
-or			printf("Boolean-operator: %s\n", yytext);
+and			{ return AND; }
+or			{ return OR; }
 
  /* Special symbols */
-[\{\}]		printf("Special symbol: %s\n", yytext);
+[\{\}]		{ return *yytext; }
 
  /* Predefined functions */
-=			printf("Predefined function: %s\n", yytext);
-\+			printf("Predefined function: %s\n", yytext);
-{ws}+\-{ws}+			printf("Predefined function: %s\n", yytext); /* a conflict with integer makes this a tricky one, as '8-9' would be 'integer integer', so we enforce whitespace wrapping so 8 - 9 behaves as expected*/
-\/			printf("Predefined function: %s\n", yytext);
-\*			printf("Predefined function: %s\n", yytext);
-%			printf("Predefined function: %s\n", yytext);
-read		printf("Predefined function: %s\n", yytext);
-print		printf("Predefined function: %s\n", yytext);
+read-int	{ return READ_INT; }
+read-float	{ return READ_FLOAT; }
+print		{ return PRINT; }
 
+[-=+*/]		{ return *yytext; }
 
  /* Keywords */
-Program		printf("Keyword: %s\n", yytext);
-Function	printf("Keyword: %s\n", yytext);
-return		printf("Keyword: %s\n", yytext);
-if			printf("Keyword: %s\n", yytext);
-then		printf("Keyword: %s\n", yytext);
-else		printf("Keyword: %s\n", yytext);
-while		printf("Keyword: %s\n", yytext);
-do			printf("Keyword: %s\n", yytext);
+Program		{ return PROGRAM; }
+Function	{ return FUNCTION; }
+return		{ return RETURN; }
+if			{ return IF; }
+then		{ return THEN; }
+else		{ return ELSE; }
+while		{ return WHILE; }
+do			{ return DO; }
 
  /* IDENTIFIER													*/
  /* Matches any identifier of form starting with a letter,		*/
@@ -62,7 +62,9 @@ do			printf("Keyword: %s\n", yytext);
  /* > {letter}({letter}|{digit})* 								*/
  /* for any length id but in our case we have to modify it a bit.*/
 
-{letter}({letter}|{digit})?({letter}|{digit})?({letter}|{digit})?({letter}|{digit})?({letter}|{digit})?		{printf("identifier: %s\n", yytext); store();}
+{letter}({letter}|{digit})?({letter}|{digit})?({letter}|{digit})?({letter}|{digit})?({letter}|{digit})?		{ 
+																												return IDENTIFIER; 
+																											}
 
 
  /* INTEGER														*/
@@ -72,8 +74,15 @@ do			printf("Keyword: %s\n", yytext);
  /* with zero or more spaces (or any whitespace) between '-' and */
  /* the number. 													*/
 
--?{ws}*0						printf("integer: %s\n", yytext);
--?{ws}*[1-9]+{digit}*			printf("integer: %s\n", yytext);
+-?{ws}*0						{
+									yylval.iValue = atoi(yytext);
+									return INTEGER;
+								}
+								
+-?{ws}*[1-9]+{digit}*			{
+									yylval.iValue = atoi(yytext);
+									return INTEGER;
+								}
 
 
  /* FLOAT */
@@ -81,16 +90,37 @@ do			printf("Keyword: %s\n", yytext);
  /* The left side of the decimal follows the rules of INTEGER, */
  /* while the right side may be any number. */
 
--?{ws}*0\.{digit}+				printf("float: %s\n", yytext);
--?{ws}*[1-9]+{digit}*\.{digit}+	printf("float: %s\n", yytext);
+-?{ws}*0\.{digit}+				{
+									yylval.fValue = atof(yytext);
+									return FLOAT;
+								}
+								
+-?{ws}*[1-9]+{digit}*\.{digit}+	{
+									yylval.fValue = atof(yytext);
+									return FLOAT;
+								}
 
 
  /* CHARACTER STRING */
  /* A character string is enclosed within parentheses, (), */
  /* and may be any collection of letters, digits, and the */
- /* backslash character. '\' will represent a newline. */ 
-
-\(({letter}|{digit}|{ws}|\\)+\)	printf("character-string: %s\n", yytext);
+ /* backslash character. '\' will represent a newline. */ 								
+\( 								{ BEGIN STRING; s = buf; }
+<STRING>\\ 					    { *s++ = '\n'; }
+<STRING>\) 						{
+									*s = 0;
+									BEGIN 0;
+									yylval.strPtr = strdup(buf);
+									printf("found '%s'\n", buf);
+									return CHARACTER_STRING;
+								}
+<STRING>({letter}|{digit}|{ws}) { *s++ = *yytext; }
+<STRING>.						{ 
+									*s = 0;
+									BEGIN 0;
+									yyerror("invalid string: " + buf);
+									return error;
+								}
 
 
  /* BOOLEAN */
@@ -101,31 +131,26 @@ do			printf("Keyword: %s\n", yytext);
  /* token always fails, we'll enforce a minimum of one character */
  /* whitespace around the token */
 
-{ws}+T{ws}+			printf("boolean: %s\n", yytext);
-{ws}+F{ws}+			printf("boolean: %s\n", yytext);
+{ws}+T{ws}+			{
+						yylval.iValue = 1;
+						return BOOLEAN;
+					}
+					
+{ws}+F{ws}+			{
+						yylval.iValue = 0;
+						return BOOLEAN;
+					}
 
 
  /* Skip whitespace */
 [ \t\n]+	/* skip */
 
-%%
-/* Stores a new symbol table entry */
-int store(){
-	symbols[count] = strdup(yytext);
-	count++;
-	return 0;
-}
+.			yyerror("invalid character: " + yytext);
 
-int main(int argc, char *argv[]){
-	count = 0;
-	i = 0;
-	yyin = fopen(argv[1], "r");
-	yylex();
-	fclose(yyin);
-	
-	printf("\n--------\nSymbol Table:\n--------\n");
-	for(i = 0; i < count; i++){
-		printf(" Entry %d: %s \n", i, symbols[i]);
-	}
+%%
+ 
+int yywrap(void)
+{
+	return 1;
 }
 

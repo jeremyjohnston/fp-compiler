@@ -24,19 +24,19 @@ by the symbol table for all identifiers found. Output is of form:
 <token matched>: <token value, or string that matched token pattern>
 
 Some design notes:
-       Some tokens I had trouble matching. Notably, "-" as there
-         is a conflict between detecting the minus sign as an
-	   operator, as opposed to as the negation sign of an integer.
-	     The admittingly poor workaround used was to enforce surrounding
-	       whitespace around "-" when used as an operator.
-	         
-		   Better would be to use LEX's lookahead functionality, but
-		     I had no success with it at this time.
-		       
-		         Other examples include the boolean literals "T" and "F".
-			   
-			     Left incomplete is the optimization for numerical operations.
-			       
-			         Various improvements will need to be made to prepare the
-				   lexer for phase 2, such as a better symbol table and
-				     better token recognition overall.
+	Some tokens I had trouble matching. Notably, "-" as there
+	is a conflict between detecting the minus sign as an
+	operator, as opposed to as the negation sign of an integer.
+	The admittingly poor workaround used was to enforce surrounding
+	whitespace around "-" when used as an operator.
+
+	Better would be to use LEX's lookahead functionality, but
+	I had no success with it at this time.
+
+	Other examples include the boolean literals "T" and "F".
+
+	Left incomplete is the optimization for numerical operations.
+
+	Various improvements will need to be made to prepare the
+	lexer for phase 2, such as a better symbol table and
+	better token recognition overall.
